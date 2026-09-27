@@ -4,9 +4,10 @@ name: Forward test
 # cutoff, score strategy/policy.py on them and open one issue with the
 # verdict. See .github/scripts/forward_test.py for the cutoff and criteria.
 
+# Operator, 2026-09-27: manual only in this fork. The test grades the upstream
+# run's pre-registered bets against the upstream journal, which is archived
+# under archive/; on a fresh run it would open a misleading issue.
 on:
-  schedule:
-    - cron: "17 6 * * *"
   workflow_dispatch:
 
 permissions:

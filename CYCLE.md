@@ -7,7 +7,9 @@ procedure exactly once, then stop. Work from this directory.
 
 - NEVER edit anything under `core/`, `config/`, or `.github/`, nor the
   operator's top-level files (`CYCLE.md`, `REAL.md`, `loop.sh`, `CLAUDE.md`,
-  `LICENSE`, `README.md`, `.gitignore`). If you believe a protected rule is
+  `LICENSE`, `README.md`, `.gitignore`), nor the operator's runner and
+  dashboard (`deploy/`, `dashboard/`, `railway.toml`, `.dockerignore`) or the
+  archived upstream journal (`archive/`). If you believe a protected rule is
   wrong, write the argument in your retro for the human operator; do not work
   around it. CI fails the push on any non-`operator:` commit touching these
   paths.
@@ -76,7 +78,9 @@ Every invocation runs as one of three ticks:
    origin (`refs/phil/lease`, see `core/lease.py`) says who is mid-cycle. If
    the environment variable `PHIL_LEASE` is set, loop.sh already handled it:
    `held-by-other` means run this invocation as a LIGHT tick, `acquired`
-   means proceed, and you never run the lease commands yourself. Otherwise
+   means proceed, `exempt-triggered` / `exempt-deep-retro` mean the runner
+   skipped the lease for a tick that is exempt from it (proceed), and you
+   never run the lease commands yourself. Otherwise
    run `python3 core/lease.py acquire`: `"acquired": false` means the other
    runner holds a fresh lease - run a LIGHT tick; `"acquired": true` means
    proceed, and release it in step 9 after your push. `"written": false`

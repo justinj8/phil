@@ -83,13 +83,30 @@ for i in $(seq 1 "$CYCLES"); do
     fi
   fi
 
+  # Tick kind (operator, 2026-09-27, Railway runner): deploy/supervisor.py
+  # sets PHIL_TICK for the two invocations the upstream cloud routines used
+  # to own. Unset means a normal hourly tick, exactly as before.
+  #   triggered  - core/watch.py check fired between hourly ticks; the
+  #                verdict rides in PHIL_TICK_PROMPT, appended to CYCLE.md.
+  #   deep-retro - the daily audit; PHIL_TICK_PROMPT replaces CYCLE.md.
+  # Both run on Opus and skip the lease: CYCLE.md exempts TRIGGERED ticks,
+  # and the deep retro only touches strategy/ and journal/, which the
+  # push-time rebase below reconciles.
+  TICK="${PHIL_TICK:-hourly}"
+  if [ "$TICK" != hourly ] && [ ! -f "${PHIL_TICK_PROMPT:-}" ]; then
+    echo "ERROR: PHIL_TICK=$TICK needs PHIL_TICK_PROMPT pointing at a prompt file" >&2
+    exit 2
+  fi
+
   # Runner lease (core/lease.py): one FULL cycle at a time across the cloud
   # routine and this loop. Taken here, in the interactive shell where the
   # keyring is unlocked, and released after the push below. The verdict
   # reaches CYCLE.md step 0 through PHIL_LEASE; a LIGHT tick still settles
   # and monitors, it just does not scan or research.
   PHIL_LEASE=acquired
-  if PHIL_PUSH_BY_LOOP=1 python3 core/lease.py acquire >/dev/null; then
+  if [ "$TICK" != hourly ]; then
+    PHIL_LEASE="exempt-$TICK"
+  elif PHIL_PUSH_BY_LOOP=1 python3 core/lease.py acquire >/dev/null; then
     :
   elif [ "$?" -eq 3 ]; then
     echo "runner lease held by the other runner — this cycle runs as a LIGHT tick" >&2
@@ -108,7 +125,9 @@ for i in $(seq 1 "$CYCLES"); do
   # would flip it, and the error would go the wrong way.
   MODEL=claude-opus-5-5
   MODEL_WHY="tick may run FULL"
-  if [ "$PHIL_LEASE" = "held-by-other" ]; then
+  if [ "$TICK" != hourly ]; then
+    MODEL_WHY="$TICK tick"
+  elif [ "$PHIL_LEASE" = "held-by-other" ]; then
     MODEL=claude-sonnet-5
     MODEL_WHY="LIGHT tick: lease held by the other runner"
   elif python3 - <<'PY'
@@ -142,10 +161,14 @@ PY
   echo "model: $MODEL ($MODEL_WHY)" >&2
 
   PROMPT="$(cat CYCLE.md)"
+  case "$TICK" in
+    triggered)  PROMPT="$PROMPT"$'\n\n'"$(cat "$PHIL_TICK_PROMPT")" ;;
+    deep-retro) PROMPT="$(cat "$PHIL_TICK_PROMPT")" ;;
+  esac
   if [ "$REAL_MODE" -eq 1 ]; then
     if [ "$PEARL_UP" -eq 1 ] \
        && python3 core/real.py doctor 2>/dev/null | grep -q '"ready": true'; then
-      PROMPT="$(cat CYCLE.md REAL.md)"
+      PROMPT="$PROMPT"$'\n\n'"$(cat REAL.md)"
     else
       echo "WARNING: --real requested but Pearl Connect signer not ready — running paper-only cycle" >&2
     fi
@@ -185,18 +208,29 @@ PY
   # happens below, in this shell. GIT_TERMINAL_PROMPT/GIT_ASKPASS make any
   # stray credential lookup fail fast instead of hanging on a keyring prompt
   # no headless session can answer; GIT_EDITOR stops `git rebase --continue`
-  # from opening an editor and blocking forever.
-  PHIL_PUSH_BY_LOOP=1 PHIL_LEASE="$PHIL_LEASE" \
+  # from opening an editor and blocking forever. The agent never pushes, so
+  # the runner's git token stays out of its environment: no tool call can
+  # echo it into the public journal.
+  env -u GITHUB_TOKEN -u GH_TOKEN PHIL_PUSH_BY_LOOP=1 PHIL_LEASE="$PHIL_LEASE" \
   GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/usr/bin/true GIT_EDITOR=true \
     "${CMD[@]}" || echo "cycle $i failed; continuing"
 
-  # Enforce the protected boundary: revert any agent edits to core/config.
-  PROTECTED_PATHS=(core/ config/ .github/ CYCLE.md REAL.md loop.sh CLAUDE.md LICENSE README.md .gitignore)
-  if ! git diff --quiet HEAD -- "${PROTECTED_PATHS[@]}"; then
+  # Enforce the protected boundary: revert any agent edits to core/config
+  # and to the operator's runner, dashboard and archived upstream journal.
+  PROTECTED_PATHS=(core/ config/ .github/ CYCLE.md REAL.md loop.sh CLAUDE.md LICENSE README.md .gitignore
+                   deploy/ dashboard/ archive/ railway.toml .dockerignore)
+  if ! git diff --quiet HEAD -- "${PROTECTED_PATHS[@]}" \
+     || [ -n "$(git ls-files --others --exclude-standard -- "${PROTECTED_PATHS[@]}")" ]; then
     echo "WARNING: agent touched protected files — reverting" >&2
-    git checkout -- "${PROTECTED_PATHS[@]}"
+    # Back to HEAD, not the index: a plain `checkout --` keeps anything the
+    # agent staged. Unstage, restore what HEAD has, then drop what it
+    # doesn't (new files). Each step tolerates listed paths that don't exist.
+    git reset -q HEAD -- "${PROTECTED_PATHS[@]}"
+    git diff --name-only -z HEAD -- "${PROTECTED_PATHS[@]}" \
+      | while IFS= read -r -d '' f; do git checkout HEAD -- "$f"; done
+    git clean -fdq -- "${PROTECTED_PATHS[@]}"
   fi
-  PROTECTED_IN_LAST_COMMITS=$(git log --oneline -5 --name-only | grep -cE '^(core/|config/|\.github/|CYCLE\.md|REAL\.md|loop\.sh|CLAUDE\.md|LICENSE|README\.md|\.gitignore)' || true)
+  PROTECTED_IN_LAST_COMMITS=$(git log --oneline -5 --name-only | grep -cE '^(core/|config/|\.github/|CYCLE\.md|REAL\.md|loop\.sh|CLAUDE\.md|LICENSE|README\.md|\.gitignore|deploy/|dashboard/|archive/|railway\.toml|\.dockerignore)' || true)
   if [ "$PROTECTED_IN_LAST_COMMITS" -gt 0 ]; then
     echo "WARNING: protected files appear in recent commits — review manually" >&2
   fi
