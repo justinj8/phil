@@ -1,0 +1,24 @@
+# Railway config-as-code for the Phil runner (operator-owned; see deploy/README.md).
+# Values here override the service settings in the Railway dashboard.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "deploy/Dockerfile"
+# Phil commits to this repo every hour. Only changes to the runner itself may
+# rebuild: journal/ and strategy/ commits must never redeploy it mid-cycle.
+watchPatterns = ["deploy/**", "dashboard/**", "railway.toml"]
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 120
+restartPolicyType = "ALWAYS"
+# One volume, one loop: never more than one replica, and never asleep.
+numReplicas = 1
+sleepApplication = false
+# Refuse to deploy without the volume, so the journal can't silently live on
+# ephemeral disk.
+requiredMountPath = "/data"
+# Redeploys send SIGTERM; give a running session up to 10 minutes to finish
+# (the supervisor waits DRAIN_WAIT_S=540 s, then stops it) instead of
+# Railway's default of 0 s, which could cut a ledger rewrite in half.
+drainingSeconds = 600

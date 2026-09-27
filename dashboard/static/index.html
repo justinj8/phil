@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phil Trader Dashboard</title>
+  <meta name="description" content="Live scoreboard for Phil, a self-improving AI paper trader on Polymarket.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/theme.js"></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="currentColor" opacity="0.08"></rect>
+        <polyline points="6,22 12,16 17,19 26,9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        <circle cx="26" cy="9" r="2.6" fill="currentColor"></circle>
+      </svg>
+      <div>
+        <h1>Phil</h1>
+        <p>Self-improving AI paper trader · Polymarket</p>
+      </div>
+    </div>
+    <div class="top-right">
+      <span id="runner-pill" class="pill st-neutral" role="status"><i class="status-icon"></i><span class="label">Loading…</span></span>
+      <span id="updated" class="muted small" aria-live="off"></span>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle light or dark theme">◐</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" role="alert" hidden></div>
+
+  <main id="main">
+    <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+
+    <section class="card" id="experiment" aria-labelledby="exp-title">
+      <div class="card-head">
+        <div>
+          <h2 id="exp-title">The 100-trade experiment</h2>
+          <p>Paper money only. The run ends when the target number of bets has settled; the honest metric is brier_delta (Phil's forecast vs. the price it paid; negative = Phil was the better forecaster), not P&amp;L.</p>
+        </div>
+      </div>
+      <div id="experiment-body"></div>
+    </section>
+
+    <section class="grid-2">
+      <figure class="card" id="pnl-card">
+        <div class="card-head">
+          <div>
+            <h2>Realized P&amp;L</h2>
+            <p>Cumulative, stepping at each settlement. Open positions are not included until they resolve.</p>
+          </div>
+          <div class="card-tools"><button class="icon-btn small" type="button" data-table-toggle="pnl">Table</button></div>
+        </div>
+        <div class="chart-host" id="chart-pnl"></div>
+      </figure>
+      <figure class="card" id="skill-card">
+        <div class="card-head">
+          <div>
+            <h2>Forecast skill vs. the market</h2>
+            <p>Rolling brier_delta over the last <span data-window>20</span> settled bets, in the order they were placed. Below zero, Phil's probabilities beat the prices it paid.</p>
+          </div>
+          <div class="card-tools"><button class="icon-btn small" type="button" data-table-toggle="skill">Table</button></div>
+        </div>
+        <div class="chart-host" id="chart-skill"></div>
+      </figure>
+    </section>
+
+    <section class="card" id="compare" aria-labelledby="cmp-title">
+      <div class="card-head">
+        <div>
+          <h2 id="cmp-title">Did the AI actually improve?</h2>
+          <p>The first <span data-window>20</span> settled bets against the last <span data-window>20</span>. A better brier_delta at the end means the forecasting improved; better P&amp;L with the same or worse brier_delta is probably luck.</p>
+        </div>
+      </div>
+      <div id="compare-body"></div>
+    </section>
+
+    <section class="grid-2">
+      <figure class="card" id="calib-card">
+        <div class="card-head">
+          <div>
+            <h2>Calibration</h2>
+            <p>When Phil says 70%, does it happen 70% of the time? Points on the diagonal are perfectly calibrated. Forecasts include every researched market, bet or not.</p>
+          </div>
+          <div class="card-tools"><button class="icon-btn small" type="button" data-table-toggle="calib">Table</button></div>
+        </div>
+        <div class="chart-host" id="chart-calib"></div>
+      </figure>
+      <section class="card" id="edge">
+        <div class="card-head">
+          <div>
+            <h2>Where the edge is (and isn't)</h2>
+            <p>Settled bets by the edge class Phil claimed and by category. Mind small n: fewer than ~15 bets says little.</p>
+          </div>
+          <div class="card-tools seg" role="group" aria-label="Group by">
+            <button type="button" data-group="edge_class" aria-pressed="true">Edge class</button>
+            <button type="button" data-group="category" aria-pressed="false">Category</button>
+          </div>
+        </div>
+        <div id="edge-body"></div>
+      </section>
+    </section>
+
+    <section class="card" id="open">
+      <div class="card-head">
+        <div>
+          <h2>Open positions</h2>
+          <p id="mtm-note">Live marks come from the Polymarket CLOB mid and refresh every few minutes. Advisory only; nothing is realized until the market resolves.</p>
+        </div>
+      </div>
+      <div id="open-body"></div>
+    </section>
+
+    <section class="card" id="trades">
+      <div class="card-head">
+        <div>
+          <h2>Trade log</h2>
+          <p>Every paper bet, newest first. Fills crossed the live spread at the best ask. Click a market to read Phil's rationale.</p>
+        </div>
+        <div class="card-tools seg" role="group" aria-label="Filter trades">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="open" aria-pressed="false">Open</button>
+          <button type="button" data-filter="won" aria-pressed="false">Won</button>
+          <button type="button" data-filter="lost" aria-pressed="false">Lost</button>
+        </div>
+      </div>
+      <div id="trades-body"></div>
+    </section>
+
+    <section class="grid-2">
+      <section class="card" id="lessons">
+        <div class="card-head">
+          <div>
+            <h2>What Phil changed about itself</h2>
+            <p>Commits that touched its judgment (playbook, risk), tools or sensing, plus every retro. Each one is a lesson it paid for in paper.</p>
+          </div>
+        </div>
+        <div id="lessons-body"></div>
+      </section>
+      <section class="card" id="retros">
+        <div class="card-head">
+          <div>
+            <h2>Retrospectives</h2>
+            <p>Written after bets settle (retro) and once a day (deep retro: keep, sharpen or revert each strategy edit).</p>
+          </div>
+        </div>
+        <div id="retros-body"></div>
+      </section>
+    </section>
+
+    <section class="card" id="runner">
+      <div class="card-head">
+        <div>
+          <h2>Runner</h2>
+          <p>The Railway supervisor: hourly cycles, watcher checks, the daily deep retro, and what each session reported.</p>
+        </div>
+      </div>
+      <div id="runner-body"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Paper trading only: no real money moves. Not financial advice.</span>
+    <span id="footer-repo"></span>
+    <span id="footer-gen"></span>
+  </footer>
+
+  <dialog id="reader" aria-labelledby="reader-title">
+    <div class="reader-head">
+      <h2 id="reader-title">Retro</h2>
+      <button class="icon-btn" type="button" id="reader-close" aria-label="Close">✕</button>
+    </div>
+    <div class="reader-body" id="reader-body"></div>
+  </dialog>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

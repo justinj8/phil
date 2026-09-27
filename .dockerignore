@@ -1,0 +1,9 @@
+# The image carries only the runner and the dashboard. The live checkout
+# (core, strategy, journal) is cloned onto the volume at boot.
+*
+!deploy
+!deploy/**
+!dashboard
+!dashboard/**
+**/__pycache__
+**/*.pyc

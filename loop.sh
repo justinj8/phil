@@ -123,12 +123,15 @@ for i in $(seq 1 "$CYCLES"); do
   # running a FULL cycle on Sonnet. The collision guard is left to CYCLE.md:
   # an operator commit landing between here and the session's own fetch
   # would flip it, and the error would go the wrong way.
-  MODEL=claude-opus-5-5
+  # PHIL_MODEL_FULL / PHIL_MODEL_LIGHT override the two pins (operator,
+  # 2026-09-27): a runner on a plan without Opus, or on a budget, sets them
+  # as environment variables instead of editing this file.
+  MODEL="${PHIL_MODEL_FULL:-claude-opus-5-5}"
   MODEL_WHY="tick may run FULL"
   if [ "$TICK" != hourly ]; then
     MODEL_WHY="$TICK tick"
   elif [ "$PHIL_LEASE" = "held-by-other" ]; then
-    MODEL=claude-sonnet-5
+    MODEL="${PHIL_MODEL_LIGHT:-claude-sonnet-5}"
     MODEL_WHY="LIGHT tick: lease held by the other runner"
   elif python3 - <<'PY'
 import datetime as dt, json, re, sys
@@ -155,7 +158,7 @@ for line in open("journal/cycles.log"):
 sys.exit(0 if full >= s["min_full_cycles_per_day"] else 1)
 PY
   then
-    MODEL=claude-sonnet-5
+    MODEL="${PHIL_MODEL_LIGHT:-claude-sonnet-5}"
     MODEL_WHY="LIGHT tick: pacing hold with the daily FULL minimum met"
   fi
   echo "model: $MODEL ($MODEL_WHY)" >&2
@@ -181,7 +184,7 @@ PY
   # detached HEAD (2026-08-28).
   CMD=(claude -p "$PROMPT" --model "$MODEL"
        --allowedTools "Read" "Glob" "Grep" "WebSearch" "WebFetch"
-         "Edit" "Write" "Task"
+         "Edit" "Write" "Task" "Agent"
          "Bash(python3 core/*)" "Bash(git add:*)" "Bash(git commit:*)"
          "Bash(git rev-parse:*)" "Bash(git log:*)" "Bash(git diff:*)"
          "Bash(git status:*)" "Bash(git symbolic-ref:*)"
