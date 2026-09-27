@@ -1,0 +1,10 @@
+{
+  "_comment": "PROTECTED run metadata, written by deploy/fresh_start.py. The dashboard treats the latest commit touching this file as the start of the run.",
+  "label": "fresh-2026-09-27",
+  "started_utc": "2026-09-27T03:47:42Z",
+  "starting_bankroll_usd": 1000.0,
+  "target_settled_bets": 100,
+  "comparison_window": 20,
+  "archived_run": "archive/upstream-2026-09-27/",
+  "source_commit": "6c2b6a4"
+}
