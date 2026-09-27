@@ -7,7 +7,7 @@ procedure exactly once, then stop. Work from this directory.
 
 - NEVER edit anything under `core/`, `config/`, or `.github/`, nor the
   operator's top-level files (`CYCLE.md`, `REAL.md`, `loop.sh`, `CLAUDE.md`,
-  `LICENSE`, `README.md`, `.gitignore`), nor the operator's runner and
+  `AGENTS.md`, `LICENSE`, `README.md`, `.gitignore`), nor the operator's runner and
   dashboard (`deploy/`, `dashboard/`, `railway.toml`, `.dockerignore`) or the
   archived upstream journal (`archive/`). If you believe a protected rule is
   wrong, write the argument in your retro for the human operator; do not work

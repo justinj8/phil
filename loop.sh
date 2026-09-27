@@ -220,7 +220,7 @@ PY
 
   # Enforce the protected boundary: revert any agent edits to core/config
   # and to the operator's runner, dashboard and archived upstream journal.
-  PROTECTED_PATHS=(core/ config/ .github/ CYCLE.md REAL.md loop.sh CLAUDE.md LICENSE README.md .gitignore
+  PROTECTED_PATHS=(core/ config/ .github/ CYCLE.md REAL.md loop.sh CLAUDE.md AGENTS.md LICENSE README.md .gitignore
                    deploy/ dashboard/ archive/ railway.toml .dockerignore)
   if ! git diff --quiet HEAD -- "${PROTECTED_PATHS[@]}" \
      || [ -n "$(git ls-files --others --exclude-standard -- "${PROTECTED_PATHS[@]}")" ]; then
@@ -233,7 +233,7 @@ PY
       | while IFS= read -r -d '' f; do git checkout HEAD -- "$f"; done
     git clean -fdq -- "${PROTECTED_PATHS[@]}"
   fi
-  PROTECTED_IN_LAST_COMMITS=$(git log --oneline -5 --name-only | grep -cE '^(core/|config/|\.github/|CYCLE\.md|REAL\.md|loop\.sh|CLAUDE\.md|LICENSE|README\.md|\.gitignore|deploy/|dashboard/|archive/|railway\.toml|\.dockerignore)' || true)
+  PROTECTED_IN_LAST_COMMITS=$(git log --oneline -5 --name-only | grep -cE '^(core/|config/|\.github/|CYCLE\.md|REAL\.md|loop\.sh|CLAUDE\.md|AGENTS\.md|LICENSE|README\.md|\.gitignore|deploy/|dashboard/|archive/|railway\.toml|\.dockerignore)' || true)
   if [ "$PROTECTED_IN_LAST_COMMITS" -gt 0 ]; then
     echo "WARNING: protected files appear in recent commits — review manually" >&2
   fi
