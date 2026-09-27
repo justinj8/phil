@@ -41,6 +41,15 @@ ASSETS = {
 STATE_TTL_S = 15
 MTM_REFRESH_S = int(os.environ.get("MTM_REFRESH_S", "180"))
 PASSWORD = os.environ.get("DASHBOARD_PASSWORD") or ""
+ON_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
+def log(msg, level="info"):
+    """On Railway: a structured JSON line on stdout (stderr shows as error)."""
+    if ON_RAILWAY:
+        print(json.dumps({"level": level, "message": f"dashboard: {msg}"}), flush=True)
+    else:
+        print(f"dashboard: {msg}", file=sys.stderr, flush=True)
 
 
 class Cache:
@@ -82,9 +91,10 @@ def mtm_loop():
 class Handler(BaseHTTPRequestHandler):
     server_version = "phil-dashboard"
 
-    def log_message(self, fmt, *args):  # quiet: only errors reach the Railway log
-        if args and str(args[1] if len(args) > 1 else "").startswith(("4", "5")):
-            sys.stderr.write("dashboard: %s - %s\n" % (self.address_string(), fmt % args))
+    def log_message(self, fmt, *args):  # quiet: only 4xx/5xx reach the Railway log
+        code = str(args[1]) if len(args) > 1 else ""
+        if code[:1] in ("4", "5"):
+            log(f"{self.address_string()} - {fmt % args}", "error" if code[:1] == "5" else "warn")
 
     def send(self, code, body, ctype="application/json", cache="no-store"):
         if isinstance(body, str):
@@ -158,8 +168,7 @@ def main():
         threading.Thread(target=mtm_loop, name="mtm", daemon=True).start()
     httpd = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     httpd.daemon_threads = True
-    print(f"dashboard: serving {data.HOME} on :{port}"
-          f"{' (basic auth on)' if PASSWORD else ''}", file=sys.stderr, flush=True)
+    log(f"serving {data.HOME} on :{port}{' (basic auth on)' if PASSWORD else ' (no DASHBOARD_PASSWORD: public)'}")
     httpd.serve_forever()
 
 

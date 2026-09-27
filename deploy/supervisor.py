@@ -55,8 +55,16 @@ def parse_iso(value):
         return None
 
 
-def log(msg):
-    print(f"{iso(utcnow())} supervisor: {msg}", file=sys.stderr, flush=True)
+ON_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID"))
+
+
+def log(msg, level="info"):
+    """One line per event. On Railway: a structured JSON line on stdout, so
+    the log explorer shows the real severity (it paints all of stderr red)."""
+    if ON_RAILWAY:
+        print(json.dumps({"level": level, "message": f"supervisor: {msg}"}), flush=True)
+    else:
+        print(f"{iso(utcnow())} supervisor: {msg}", file=sys.stderr, flush=True)
 
 
 def env_int(name, default, lo=0):
@@ -66,7 +74,7 @@ def env_int(name, default, lo=0):
     try:
         return max(lo, int(raw))
     except ValueError:
-        log(f"ignoring {name}={raw!r} (not an integer); using {default}")
+        log(f"ignoring {name}={raw!r} (not an integer); using {default}", "warn")
         return default
 
 
@@ -80,7 +88,7 @@ def parse_hhmm(raw):
         return None
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", raw)
     if not m or int(m.group(1)) > 23 or int(m.group(2)) > 59:
-        log(f"ignoring DEEP_RETRO_UTC={raw!r} (want HH:MM); deep retro off")
+        log(f"ignoring DEEP_RETRO_UTC={raw!r} (want HH:MM); deep retro off", "warn")
         return None
     return dt.time(int(m.group(1)), int(m.group(2)))
 
@@ -327,7 +335,7 @@ class Supervisor:
         try:
             write_json_atomic(self.cfg.runtime / "status.json", status)
         except OSError as e:
-            log(f"could not write status.json: {e}")
+            log(f"could not write status.json: {e}", "error")
 
     # -- work -------------------------------------------------------------------------------
 
@@ -364,7 +372,7 @@ class Supervisor:
         try:
             self.git("fetch", "--quiet", "origin", self.cfg.branch, timeout=60)
         except subprocess.TimeoutExpired:
-            log("watch: git fetch timed out; checking against the local origin/main")
+            log("watch: git fetch timed out; checking against the local origin/main", "warn")
         verdict = {"trigger": False, "error": "no output"}
         try:
             out = subprocess.run([sys.executable, "core/watch.py", "check"], cwd=self.cfg.home,
@@ -395,7 +403,7 @@ class Supervisor:
     def run_session(self, kind, prompt=None):
         cfg, st = self.cfg, self.state
         if st.sessions_today >= cfg.max_sessions:
-            log(f"{kind}: daily session cap ({cfg.max_sessions}) reached; skipping")
+            log(f"{kind}: daily session cap ({cfg.max_sessions}) reached; skipping", "warn")
             return
         start = utcnow()
         log_path = cfg.runtime / "logs" / f"{start.strftime('%Y%m%dT%H%M%SZ')}-{kind}.log"
@@ -427,11 +435,11 @@ class Supervisor:
                 self.write_status()
                 if time.monotonic() > deadline:
                     timed_out = True
-                    log(f"{kind}: over {cfg.timeout_min} min, stopping it")
+                    log(f"{kind}: over {cfg.timeout_min} min, stopping it", "warn")
                     self.stop_group()
                 elif STOP["requested"] and time.monotonic() - STOP["at"] > cfg.drain_s:
                     interrupted = True
-                    log(f"{kind}: shutdown drain ({cfg.drain_s}s) spent, stopping it")
+                    log(f"{kind}: shutdown drain ({cfg.drain_s}s) spent, stopping it", "warn")
                     self.stop_group()
             code = self.proc.returncode
             self.proc = None
@@ -450,7 +458,8 @@ class Supervisor:
         self.current = None
         self.write_status()
         log(f"{kind}: done in {round((end - start).total_seconds())}s, exit {code}"
-            + (" (the Claude session failed; see its log)" if claude_failed else ""))
+            + (" (the Claude session failed; see its log)" if claude_failed else ""),
+            "warn" if claude_failed or timed_out else "info")
         self.prune_logs()
 
     def stop_group(self):
@@ -508,10 +517,10 @@ class Supervisor:
         self.write_status("starting")
         self.bootstrap()
         for w in self.warnings:
-            log(f"WARNING: {w}")
+            log(f"WARNING: {w}", "warn")
         blocked = self.check_blockers()
         if blocked:
-            log(f"BLOCKED: {blocked}")
+            log(f"BLOCKED: {blocked}", "warn")
         retry_at = time.monotonic() + 300
         while not STOP["requested"]:
             try:
@@ -520,10 +529,10 @@ class Supervisor:
                     retry_at = time.monotonic() + 300
                     self.blocked = None
                     self.bootstrap()
-                    log(f"bootstrap retry: {self.blocked or 'ok'}")
+                    log(f"bootstrap retry: {self.blocked or 'ok'}", "warn" if self.blocked else "info")
                 self.step()
             except Exception as e:  # noqa: BLE001 - one bad tick must not end the runner
-                log(f"tick failed: {type(e).__name__}: {e}")
+                log(f"tick failed: {type(e).__name__}: {e}", "error")
             self.write_status()
             for _ in range(TICK_S):
                 if STOP["requested"]:
