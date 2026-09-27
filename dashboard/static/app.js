@@ -353,7 +353,7 @@ function table(headers, rows, opts = {}) {
 // --- markdown (retros) -> DOM, no innerHTML ------------------------------------------
 
 function inline(parent, text) {
-  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  const re = /(\*\*.+?\*\*|`[^`]+`)/g;
   let last = 0, m;
   while ((m = re.exec(text))) {
     if (m.index > last) parent.append(text.slice(last, m.index));
@@ -396,10 +396,11 @@ function renderMarkdown(text) {
       const ordered = /^\s*\d+\./.test(ln);
       const list = h(ordered ? "ol" : "ul");
       while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) {
-        const li = inline(h("li"), lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ""));
+        // Join the item's continuation lines first: bold often spans them.
+        const parts = [lines[i].replace(/^\s*([-*]|\d+\.)\s+/, "")];
         i++;
-        while (i < lines.length && lines[i].trim() && /^\s{2,}/.test(lines[i]) && !/^\s*([-*]|\d+\.)\s+/.test(lines[i])) inline(li, " " + lines[i++].trim());
-        list.append(li);
+        while (i < lines.length && lines[i].trim() && /^\s{2,}/.test(lines[i]) && !/^\s*([-*]|\d+\.)\s+/.test(lines[i])) parts.push(lines[i++].trim());
+        list.append(inline(h("li"), parts.join(" ")));
       }
       out.append(list); continue;
     }
@@ -754,7 +755,7 @@ function renderRunner() {
     const hist = r.history || [];
     if (hist.length) {
       const result = (x) => x.timed_out ? statusEl("st-critical", "Timed out") : x.interrupted ? statusEl("st-warning", "Interrupted")
-        : x.exit === 0 ? statusEl("st-good", "OK") : statusEl("st-critical", `Exit ${x.exit}`);
+        : x.claude_failed ? statusEl("st-critical", "Claude failed") : x.exit === 0 ? statusEl("st-good", "OK") : statusEl("st-critical", `Exit ${x.exit}`);
       parts.push(h("h3", {}, "Recent sessions"), table(
         [{ label: "Kind" }, { label: "Started (UTC)" }, { label: "Took", cls: "num" }, { label: "Result" }, { label: "Reported" }, { label: "" }],
         hist.slice(0, 15).map((x) => [KIND[x.kind] || x.kind, when(x.started_utc), duration(x.duration_s), result(x),

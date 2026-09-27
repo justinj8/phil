@@ -337,8 +337,10 @@ class Supervisor:
         except OSError:
             return 0
 
-    def summary_since(self, before, log_path):
-        """What the session reported: its cycle-log line, else the log's last line."""
+    def summary_since(self, before, head_before, log_text):
+        """What the session reported: its cycle-log line, else the subject of
+        the newest commit it made (a deep retro logs no cycle line), else the
+        last line of its log."""
         try:
             lines = (self.cfg.home / "journal" / "cycles.log").read_text().splitlines()[before:]
             done = [ln for ln in lines if " cycle done:" in ln]
@@ -346,11 +348,12 @@ class Supervisor:
                 return done[-1].split(" cycle done: ", 1)[-1][:400]
         except OSError:
             pass
-        try:
-            tail = [ln.strip() for ln in log_path.read_text(errors="replace").splitlines() if ln.strip()]
-            return tail[-1][:400] if tail else ""
-        except OSError:
-            return ""
+        if head_before:
+            subjects = (self.git("log", "--format=%s", f"{head_before}..HEAD").stdout or "").splitlines()
+            if subjects:
+                return subjects[0][:400]
+        tail = [ln.strip() for ln in log_text.splitlines() if ln.strip()]
+        return tail[-1][:400] if tail else ""
 
     def run_watch(self):
         now = utcnow()
@@ -406,6 +409,7 @@ class Supervisor:
         st.sessions_today += 1
         st.save()
         before = self.cycles_log_len()
+        head_before = (self.git("rev-parse", "HEAD").stdout or "").strip() or None
         self.current = {"kind": kind, "started_utc": iso(start), "log": log_path.name}
         self.write_status()
         log(f"{kind}: starting (session {st.sessions_today}/{cfg.max_sessions} today), log {log_path.name}")
@@ -433,14 +437,20 @@ class Supervisor:
             self.proc = None
         end = utcnow()
         st.last_session_end = end
+        log_text = log_path.read_text(errors="replace")
+        # loop.sh swallows a failed `claude -p` ("cycle N failed; continuing")
+        # and still pushes, so its exit code alone can't tell success apart.
+        claude_failed = "failed; continuing" in log_text
         st.history.insert(0, {"kind": kind, "started_utc": iso(start), "ended_utc": iso(end),
                               "duration_s": round((end - start).total_seconds()), "exit": code,
-                              "timed_out": timed_out, "interrupted": interrupted, "log": log_path.name,
-                              "summary": self.summary_since(before, log_path)})
+                              "claude_failed": claude_failed, "timed_out": timed_out,
+                              "interrupted": interrupted, "log": log_path.name,
+                              "summary": self.summary_since(before, head_before, log_text)})
         st.save()
         self.current = None
         self.write_status()
-        log(f"{kind}: done in {round((end - start).total_seconds())}s, exit {code}")
+        log(f"{kind}: done in {round((end - start).total_seconds())}s, exit {code}"
+            + (" (the Claude session failed; see its log)" if claude_failed else ""))
         self.prune_logs()
 
     def stop_group(self):

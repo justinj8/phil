@@ -14,6 +14,12 @@ whose settled evidence has earned it.
 The name honors the man who relived the same day until he'd learned enough
 to win it, and the groundhog who makes forecasts.
 
+> **This fork** runs Phil unattended on Railway, paper only
+> (`real_trading_enabled` is false), with a live dashboard of its bets,
+> calibration and self-edits. Setup and operation:
+> [deploy/README.md](deploy/README.md). The upstream run's journal is archived
+> under `archive/`; this run's scoreboard started fresh at $1,000.
+
 
 ## The experiment
 

@@ -270,5 +270,7 @@ PY
       || echo "WARNING: could not release the runner lease — it expires on its own" >&2
   fi
 
-  [ "$i" -lt "$CYCLES" ] && sleep $((SLEEP_MIN * 60))
+  # An if, not `[ ] && sleep`: on the last cycle that test is false, and as
+  # the final command it made every run exit 1 (a supervisor reads that).
+  if [ "$i" -lt "$CYCLES" ]; then sleep $((SLEEP_MIN * 60)); fi
 done

@@ -16,6 +16,9 @@ retrospective → edit its own strategy → research → place simulated bets.
   pass, and a boundary guard — commits not prefixed `operator:` are agent
   commits and must not touch operator-owned paths. Human commits to protected
   files MUST use the `operator:` message prefix or CI fails the push.
+- `deploy/`, `dashboard/`, `railway.toml`, `.dockerignore` — OPERATOR-OWNED
+  Railway runner and read-only dashboard (deploy/README.md); `archive/` —
+  the archived upstream journal, read-only. Protected exactly like `core/`.
 - `strategy/` — the agent's own playbook, risk policy, and tools. This is what
   self-improves. Its git history IS the experiment's product.
 - `journal/` — ledger (JSONL, written only by core), retros, cycle log.
