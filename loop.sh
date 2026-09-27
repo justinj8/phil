@@ -233,9 +233,22 @@ PY
       | while IFS= read -r -d '' f; do git checkout HEAD -- "$f"; done
     git clean -fdq -- "${PROTECTED_PATHS[@]}"
   fi
-  PROTECTED_IN_LAST_COMMITS=$(git log --oneline -5 --name-only | grep -cE '^(core/|config/|\.github/|CYCLE\.md|REAL\.md|loop\.sh|CLAUDE\.md|AGENTS\.md|LICENSE|README\.md|\.gitignore|deploy/|dashboard/|archive/|railway\.toml|\.dockerignore)' || true)
-  if [ "$PROTECTED_IN_LAST_COMMITS" -gt 0 ]; then
-    echo "WARNING: protected files appear in recent commits — review manually" >&2
+  # Hold the push if an unpushed agent commit touches operator-owned paths
+  # (operator, 2026-09-27). Railway rebuilds on runner changes, so publishing
+  # one could deploy code the agent wrote; this used to only warn and leave
+  # it to CI. Commits whose subject starts "operator:" are exempt, like CI.
+  PROTECTED_RE='^(core/|config/|\.github/|CYCLE\.md|REAL\.md|loop\.sh|CLAUDE\.md|AGENTS\.md|LICENSE|README\.md|\.gitignore|deploy/|dashboard/|archive/|railway\.toml|\.dockerignore)'
+  HOLD_PUSH=""
+  if git rev-parse -q --verify origin/main >/dev/null; then
+    for sha in $(git rev-list --no-merges origin/main..HEAD); do
+      case "$(git log -1 --format=%s "$sha")" in operator:*) continue ;; esac
+      if git diff-tree --no-commit-id --name-only -r "$sha" | grep -qE "$PROTECTED_RE"; then
+        HOLD_PUSH="$HOLD_PUSH $(git rev-parse --short "$sha")"
+      fi
+    done
+  fi
+  if [ -n "$HOLD_PUSH" ]; then
+    echo "ERROR: agent commit(s)$HOLD_PUSH touch operator-owned paths — NOT pushing; operator review needed" >&2
   fi
 
   # Push from this shell, not from the agent. The credential helper is
@@ -245,7 +258,7 @@ PY
   # (2026-08-28: three hangs, commits stranded on a detached HEAD). This shell
   # is the interactive one the operator started, where the keychain is already
   # unlocked. CI remains the guard on protected-path commits.
-  if git remote get-url origin >/dev/null 2>&1; then
+  if [ -z "$HOLD_PUSH" ] && git remote get-url origin >/dev/null 2>&1; then
     if ! git symbolic-ref -q HEAD >/dev/null; then
       echo "WARNING: HEAD detached after cycle — reattaching main to HEAD" >&2
       git checkout -B main HEAD
